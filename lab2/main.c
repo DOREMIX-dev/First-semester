@@ -14,6 +14,9 @@ int main()
     int x = 7;
     int sch;
     int per;
+    int max;
+    int mmax;
+    int count;
 
     while (x != 0) {
         printf("Введите номер действия:\n");
@@ -69,8 +72,39 @@ int main()
                 printf("Введен неверный индекс слота!");
             }
         }
-        else {
-            printf("Команда пока не реализована\n");
+        else if (x == 6) {
+            mmax = 0;
+            sch = 1;
+            per = 0;
+            count = 0;
+
+            while (sch != 10) {
+                max = 0;
+                per = 0;
+
+                while (per != 10) {
+                    if (inventoryx[per] == sch) {
+                        max = max + 1;
+                    }
+                    per++;
+                }
+
+                if (mmax < max) {
+                    mmax = max;
+                    count = sch;
+                }
+                sch++;
+            }
+
+            if (mmax == 1 || (mmax >= 5 && mmax <= 10)) {
+                printf("Самый частовстречаемый предмет: %d, он встречается %d раз.\n", count, mmax);
+            }
+            else {
+                printf("Самый частовстречаемый предмет: %d, он встречается %d раза.\n", count, mmax);
+            }
+        }
+        else if (x >= 7) {
+            printf("Есть лишь 6 команд!");
         }
     }
 
