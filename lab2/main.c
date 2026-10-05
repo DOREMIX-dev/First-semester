@@ -10,6 +10,7 @@ int main()
         "Золото", "Серебро", "Алмазы", "Обсидиан", "Безумруды"
     }; // Библиотека существующих вещей.
     int inventoryx[10] = { 0 }; // Что именно находится?
+    int hour;
     int x = 7;
     int sch;
     int per;
@@ -20,6 +21,17 @@ int main()
 
         if (x == 1) {
             printf("Текущее время: %d, %d:00 \n", current_day, current_hour);
+        }
+        else if (x == 2) {
+            printf("Сколько хотите потратить часов на работу? ");
+            scanf("%d", &hour);
+            if (current_hour + hour < 24) {
+                current_hour = current_hour + hour;
+            }
+            else {
+                current_day = current_day + 1;
+                current_hour = current_hour + hour - 24;
+            }
         }
         else if (x == 3) {
             sch = 0;
