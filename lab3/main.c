@@ -1,0 +1,129 @@
+#include <stdio.h>
+
+int main()
+{
+    int current_day = 1;
+    int current_hour = 8;
+    int inventory[10] = { 0 }; // Сколько находится?
+    char* inventoryv[10] = {
+        "", "Дерево", "Камень", "Семена", "Железо",
+        "Золото", "Серебро", "Алмазы", "Обсидиан", "Безумруды"
+    }; // Библиотека существующих вещей.
+    int inventoryx[10] = { 0 }; // Что именно находится?
+    int hour;
+    int x = 7;
+    int sch;
+    int per;
+    int max;
+    int mmax;
+    int count;
+
+    while (x != 0) {
+        printf("Введите номер действия:\n");
+        scanf("%d", &x);
+
+        switch (x) {
+        case 1:
+            printf("Текущее время: %d, %d:00 \n", current_day, current_hour);
+            break;
+
+        case 2:
+            printf("Сколько хотите потратить часов на работу? ");
+            scanf("%d", &hour);
+
+            if (current_hour + hour < 24) {
+                current_hour = current_hour + hour;
+            }
+            else {
+                current_day = current_day + 1;
+                current_hour = current_hour + hour - 24;
+            }
+            break;
+
+        case 3:
+            sch = 0;
+            while (sch != 10) {
+                if (inventoryv[inventoryx[sch]] == "") {
+                    printf("Слот %d: [0]\n", sch);
+                }
+                else {
+                    printf("Слот %d: [%d] (%s)\n",
+                        sch, inventory[sch], inventoryv[inventoryx[sch]]);
+                }
+                sch = sch + 1;
+            }
+            break;
+
+        case 4:
+            printf("Введите индекс слота: \n");
+            scanf("%d", &per);
+            printf("Введите ID предмета: \n");
+            scanf("%d", &sch);
+
+            if ((per >= 0) && (per <= 9) && (sch >= 0) && (sch <= 9)) {
+                inventory[per] = inventory[per] + 1;
+                inventoryx[per] = sch;
+            }
+            else {
+                printf("Введен неверный индекс или ID\n");
+            }
+            break;
+
+        case 5:
+            printf("Введите индекс слота с которого хотите выбросить предметы\n");
+            scanf("%d", &per);
+
+            if (per >= 0 && per <= 9) {
+                inventory[per] = 0;
+                inventoryx[per] = 0;
+            }
+            else {
+                printf("Введен неверный индекс слота!\n");
+            }
+            break;
+
+        case 6:
+            mmax = 0;
+            sch = 1;
+            per = 0;
+            count = 0;
+
+            while (sch != 10) {
+                max = 0;
+                per = 0;
+
+                while (per != 10) {
+                    if (inventoryx[per] == sch) {
+                        max = max + 1;
+                    }
+                    per++;
+                }
+
+                if (mmax < max) {
+                    mmax = max;
+                    count = sch;
+                }
+                sch++;
+            }
+
+            if (mmax == 1 || (mmax >= 5 && mmax <= 10)) {
+                printf("Самый частовстречаемый предмет: %d, он встречается %d раз.\n",
+                    count, mmax);
+            }
+            else {
+                printf("Самый частовстречаемый предмет: %d, он встречается %d раза.\n",
+                    count, mmax);
+            }
+            break;
+
+        case 0:
+            break; // выход из программы
+
+        default:
+            printf("Есть лишь 6 команд!\n");
+            break;
+        }
+    }
+
+    return 0;
+}
