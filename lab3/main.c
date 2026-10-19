@@ -6,6 +6,9 @@
 #define MAX_NAME_LEN 32
 #define MAX_FARMER_NAME 33
 
+#define MAX_RECORDS 200
+#define MAX_NPC_NAME 64
+
 int load_items(char item_names[][MAX_NAME_LEN])
 {
     FILE* f;
@@ -66,6 +69,7 @@ void print_menu(void)
     printf(" 6 - Найти самый частый предмет\n");
     printf(" 7 - Поиск предмета в рюкзаке по названию\n");
     printf(" 8 - Записать состояние в дневник (diary.txt)\n");
+    printf(" 9 - Расписание жителей деревни (input.txt -> output.txt)\n");
     printf(" 0 - Выйти из программы\n");
     printf("--------------------------------------\n");
 }
@@ -264,6 +268,149 @@ void write_diary(const char* farmer_name, int day, int hour,
     printf("Состояние записано в diary.txt\n");
 }
 
+void parse_entry(const char* token,
+    char names[][MAX_NPC_NAME], int* starts, int* ends,
+    char locs[][MAX_NPC_NAME], int* count)
+{
+    char name[MAX_NPC_NAME];
+    char loc[MAX_NPC_NAME];
+    int s, e;
+
+    if (*count >= MAX_RECORDS) {
+        return;
+    }
+
+    sscanf(token, "%63[^;];%d;%d;%63[^\n]", name, &s, &e, loc);
+
+    snprintf(names[*count], MAX_NPC_NAME, "%s", name);
+    starts[*count] = s;
+    ends[*count] = e;
+    snprintf(locs[*count], MAX_NPC_NAME, "%s", loc);
+    (*count)++;
+}
+
+int load_schedule(char names[][MAX_NPC_NAME], int* starts, int* ends,
+    char locs[][MAX_NPC_NAME], int* count)
+{
+    FILE* f;
+    char token[1024];
+    int tlen = 0;
+    int c;
+
+    *count = 0;
+    f = fopen("input.txt", "r");
+    if (!f) {
+        return 0;
+    }
+
+    while ((c = fgetc(f)) != EOF) {
+        if (c == ',' || c == '\n' || c == '\r') {
+            if (tlen > 0) {
+                token[tlen] = '\0';
+                parse_entry(token, names, starts, ends, locs, count);
+                tlen = 0;
+            }
+        }
+        else {
+            token[tlen++] = (char)c;
+        }
+    }
+    if (tlen > 0) {
+        token[tlen] = '\0';
+        parse_entry(token, names, starts, ends, locs, count);
+    }
+
+    fclose(f);
+    return 1;
+}
+
+int hour_in_interval(int hour, int start, int end)
+{
+    if (end > start) {
+        return hour >= start && hour < end;
+    }
+    if (end < start) {
+        return hour >= start || hour < end;
+    }
+    return 0;
+}
+
+int find_location(const char names[][MAX_NPC_NAME], const int* starts, const int* ends,
+    const char locs[][MAX_NPC_NAME], int count,
+    const char* npc, int hour, char* out_loc)
+{
+    int i;
+
+    for (i = 0; i < count; i++) {
+        if (strcmp(names[i], npc) == 0) {
+            if (hour_in_interval(hour, starts[i], ends[i])) {
+                snprintf(out_loc, MAX_NPC_NAME, "%s", locs[i]);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// 9
+void decode_variant(int hour)
+{
+    char names[MAX_RECORDS][MAX_NPC_NAME];
+    char locs[MAX_RECORDS][MAX_NPC_NAME];
+    int starts[MAX_RECORDS];
+    int ends[MAX_RECORDS];
+    int count = 0;
+    char unique[MAX_RECORDS][MAX_NPC_NAME];
+    int unique_count = 0;
+    FILE* out;
+    char cur_loc[MAX_NPC_NAME];
+    int i, j;
+
+    if (!load_schedule(names, starts, ends, locs, &count)) {
+        printf("Ошибка: не удалось открыть input.txt.\n");
+        return;
+    }
+
+    for (i = 0; i < count; i++) {
+        int seen = 0;
+        for (j = 0; j < unique_count; j++) {
+            if (strcmp(unique[j], names[i]) == 0) {
+                seen = 1;
+                break;
+            }
+        }
+        if (!seen) {
+            snprintf(unique[unique_count], MAX_NPC_NAME, "%s", names[i]);
+            unique_count++;
+        }
+    }
+
+    out = fopen("output.txt", "w");
+    if (!out) {
+        printf("Ошибка: не удалось создать output.txt.\n");
+        return;
+    }
+
+    printf("Расписание жителей на %d:00\n", hour);
+    printf("--------------------------------------\n");
+    fprintf(out, "Расписание жителей на %d:00\n", hour);
+    fprintf(out, "--------------------------------------\n");
+
+    for (j = 0; j < unique_count; j++) {
+        if (find_location(names, starts, ends, locs, count, unique[j], hour, cur_loc)) {
+            printf("%-20s %s\n", unique[j], cur_loc);
+            fprintf(out, "%-20s %s\n", unique[j], cur_loc);
+        }
+        else {
+            printf("%-20s [Спит дома]\n", unique[j]);
+            fprintf(out, "%-20s [Спит дома]\n", unique[j]);
+        }
+    }
+
+    fclose(out);
+    printf("\nРезультат также записан в output.txt\n");
+}
+
 void handle_choice(int choice,
     const char* farmer_name,
     int* day, int* hour,
@@ -296,10 +443,13 @@ void handle_choice(int choice,
     case 8:
         write_diary(farmer_name, *day, *hour, counts, item_names, ids);
         break;
+    case 9:
+        decode_variant(*hour);
+        break;
     case 0:
         break;
     default:
-        printf("Есть лишь 8 команд!\n");
+        printf("Есть лишь 9 команд!\n");
         break;
     }
 }
