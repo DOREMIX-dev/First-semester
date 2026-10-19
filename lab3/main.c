@@ -64,6 +64,8 @@ void print_menu(void)
     printf(" 4 - Положить предмет в слот\n");
     printf(" 5 - Выбросить предмет из слота\n");
     printf(" 6 - Найти самый частый предмет\n");
+    printf(" 7 - Поиск предмета в рюкзаке по названию\n");
+    printf(" 8 - Записать состояние в дневник (diary.txt)\n");
     printf(" 0 - Выйти из программы\n");
     printf("--------------------------------------\n");
 }
@@ -187,7 +189,83 @@ void show_most_common(const int* ids, const char item_names[][MAX_NAME_LEN])
         item_names[best_item], best_item, best_count, plural_raz(best_count));
 }
 
+// 7
+void find_item(const int* counts, const char item_names[][MAX_NAME_LEN], const int* ids)
+{
+    char search[MAX_NAME_LEN];
+    int id = -1;
+    int i;
+    int found_slot = 0;
+    size_t len;
+
+    printf("Введите название предмета для поиска: ");
+    if (scanf(" %31[^\n]", search) != 1) {
+        printf("Ошибка ввода названия.\n");
+        return;
+    }
+
+    len = strlen(search);
+    while (len > 0 && (search[len - 1] == '\r' || search[len - 1] == '\n')) {
+        search[--len] = '\0';
+    }
+
+    for (i = 0; i < MAX_ITEMS; i++) {
+        if (strcmp(item_names[i], search) == 0) {
+            id = i;
+            break;
+        }
+    }
+
+    if (id == -1) {
+        printf("Предмет '%s' не найден в каталоге.\n", search);
+        return;
+    }
+
+    if (id == 0) {
+        printf("'%s' — это пустой слот, а не предмет.\n", search);
+        return;
+    }
+
+    printf("ID предмета '%s': %d\n", search, id);
+    printf("Слоты с этим предметом:\n");
+    for (i = 0; i < INV_SIZE; i++) {
+        if (ids[i] == id && counts[i] > 0) {
+            printf("  Слот %d: %d шт.\n", i, counts[i]);
+            found_slot = 1;
+        }
+    }
+    if (!found_slot) {
+        printf("  В инвентаре этого предмета нет.\n");
+    }
+}
+
+// 8
+void write_diary(const char* farmer_name, int day, int hour,
+    const int* counts, const char item_names[][MAX_NAME_LEN], const int* ids)
+{
+    FILE* f;
+    int i;
+
+    f = fopen("diary.txt", "a");
+    if (!f) {
+        printf("Ошибка: не удалось открыть diary.txt для записи.\n");
+        return;
+    }
+
+    fprintf(f, "=== Дневник фермера %s ===\n", farmer_name);
+    fprintf(f, "День %d, %d:00\n", day, hour);
+    fprintf(f, "Инвентарь:\n");
+    for (i = 0; i < INV_SIZE; i++) {
+        fprintf(f, "  Слот %d: [%d] - %s\n", i, counts[i], item_names[ids[i]]);
+    }
+    fprintf(f, "\n");
+
+    fclose(f);
+    printf("Состояние записано в diary.txt\n");
+}
+
 void handle_choice(int choice,
+    const char* farmer_name,
     int* day, int* hour,
     int* counts,
     char item_names[][MAX_NAME_LEN],
@@ -212,10 +290,16 @@ void handle_choice(int choice,
     case 6:
         show_most_common(ids, item_names);
         break;
+    case 7:
+        find_item(counts, item_names, ids);
+        break;
+    case 8:
+        write_diary(farmer_name, *day, *hour, counts, item_names, ids);
+        break;
     case 0:
         break;
     default:
-        printf("Есть лишь 6 команд!\n");
+        printf("Есть лишь 8 команд!\n");
         break;
     }
 }
@@ -286,7 +370,7 @@ int main(void)
         printf("Введите номер действия:\n");
         scanf("%d", &x);
 
-        handle_choice(x, &current_day, &current_hour,
+        handle_choice(x, farmer_name, &current_day, &current_hour,
             inventory, item_names, inventoryx);
     }
 
