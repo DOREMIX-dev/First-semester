@@ -73,6 +73,124 @@ int read_int(const char* prompt, int minimum, int maximum, int* value)
     }
 }
 
+#define MAP_MIN_SIZE 5
+#define MAP_MAX_SIZE 30
+#define OBSTACLE_PERCENT 20
+#define PERCENT_TOTAL 100
+#define TILE_WALL '#'
+#define TILE_FLOOR '.'
+#define TILE_TREE 'T'
+#define TILE_ROCK 'R'
+#define TILE_UP 'U'
+#define TILE_DOWN 'D'
+#define TILE_HERO '@'
+
+typedef struct {
+    char** cells;
+    int width;
+    int height;
+    int hero_x;
+    int hero_y;
+    int depth;
+} Dungeon;
+
+void free_map(Dungeon* dungeon)
+{
+    int y;
+    if (dungeon->cells) {
+        for (y = 0; y < dungeon->height; y++) free(dungeon->cells[y]);
+        free(dungeon->cells);
+    }
+    dungeon->cells = NULL;
+    dungeon->width = 0;
+    dungeon->height = 0;
+}
+
+int allocate_map(Dungeon* dungeon, int width, int height)
+{
+    int y;
+    if (dungeon->cells || width < MAP_MIN_SIZE || width > MAP_MAX_SIZE ||
+        height < MAP_MIN_SIZE || height > MAP_MAX_SIZE) return 0;
+    dungeon->width = width;
+    dungeon->height = height;
+    dungeon->cells = calloc((size_t)height, sizeof(*dungeon->cells));
+    if (!dungeon->cells) {
+        free_map(dungeon);
+        return 0;
+    }
+    for (y = 0; y < height; y++) {
+        dungeon->cells[y] = malloc((size_t)width * sizeof(*dungeon->cells[y]));
+        if (!dungeon->cells[y]) {
+            free_map(dungeon);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int random_between(int minimum, int maximum)
+{
+    return minimum + rand() % (maximum - minimum + 1);
+}
+
+/* Проход от старта до D: сначала по горизонтали, затем по вертикали. */
+int is_stair_path(int x, int y, int start_x, int start_y, int down_x, int down_y)
+{
+    int min_x = start_x < down_x ? start_x : down_x;
+    int max_x = start_x > down_x ? start_x : down_x;
+    int min_y = start_y < down_y ? start_y : down_y;
+    int max_y = start_y > down_y ? start_y : down_y;
+    return (y == start_y && x >= min_x && x <= max_x) ||
+        (x == down_x && y >= min_y && y <= max_y);
+}
+
+int generate_map(Dungeon* dungeon)
+{
+    int x, y, down_x, down_y, up_x;
+    int candidates = 0;
+    int obstacles;
+    int width = random_between(MAP_MIN_SIZE, MAP_MAX_SIZE);
+    int height = random_between(MAP_MIN_SIZE, MAP_MAX_SIZE);
+    if (!allocate_map(dungeon, width, height)) return 0;
+    dungeon->hero_x = random_between(1, width - 2);
+    dungeon->hero_y = random_between(1, height - 2);
+    up_x = dungeon->hero_x == width - 2 ? dungeon->hero_x - 1 : dungeon->hero_x + 1;
+    do {
+        down_x = random_between(1, width - 2);
+        down_y = random_between(1, height - 2);
+    } while ((down_x == dungeon->hero_x && down_y == dungeon->hero_y) ||
+        (down_x == up_x && down_y == dungeon->hero_y));
+
+    for (y = 0; y < height; y++) {
+        for (x = 0; x < width; x++) {
+            dungeon->cells[y][x] = (x == 0 || y == 0 || x == width - 1 || y == height - 1)
+                ? TILE_WALL : TILE_FLOOR;
+        }
+    }
+    dungeon->cells[dungeon->hero_y][up_x] = TILE_UP;
+    dungeon->cells[down_y][down_x] = TILE_DOWN;
+    for (y = 1; y < height - 1; y++) {
+        for (x = 1; x < width - 1; x++) {
+            if (dungeon->cells[y][x] == TILE_FLOOR &&
+                !is_stair_path(x, y, dungeon->hero_x, dungeon->hero_y, down_x, down_y)) candidates++;
+        }
+    }
+    obstacles = ((width - 2) * (height - 2) * OBSTACLE_PERCENT + PERCENT_TOTAL - 1) / PERCENT_TOTAL;
+    /* Выбор без повторений: число препятствий не зависит от удачи в цикле. */
+    for (y = 1; y < height - 1; y++) {
+        for (x = 1; x < width - 1; x++) {
+            if (dungeon->cells[y][x] != TILE_FLOOR ||
+                is_stair_path(x, y, dungeon->hero_x, dungeon->hero_y, down_x, down_y)) continue;
+            if (random_between(1, candidates) <= obstacles) {
+                dungeon->cells[y][x] = random_between(0, 1) ? TILE_TREE : TILE_ROCK;
+                obstacles--;
+            }
+            candidates--;
+        }
+    }
+    return 1;
+}
+
 int load_items(char item_names[][MAX_NAME_LEN])
 {
     FILE* f;
