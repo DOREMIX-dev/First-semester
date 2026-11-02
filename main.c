@@ -310,47 +310,30 @@ void adventure(void)
 int load_items(char item_names[][MAX_NAME_LEN])
 {
     FILE* f;
-    char line[256];
+    char line[MAX_NAME_LEN];
     int line_no = 0;
-    int i;
-
-    for (i = 0; i < MAX_ITEMS; i++) {
-        item_names[i][0] = '\0';
-    }
+    int result;
 
     f = fopen("items.txt", "r");
     if (!f) {
         printf("Ошибка: файл items.txt не найден. Программа будет остановлена.\n");
         return 0;
     }
-
-    while (fgets(line, sizeof(line), f) != NULL && line_no < MAX_ITEMS) {
-        size_t len = strlen(line);
-        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
-            line[--len] = '\0';
-        }
-        if (len == 0) {
-            printf("Ошибка: в файле items.txt обнаружена пустая строка (строка %d). Программа будет остановлена.\n",
-                line_no + 1);
+    while ((result = read_line(f, line, sizeof(line))) != 0) {
+        if (result < 0 || line[0] == '\0' || line_no >= MAX_ITEMS) {
+            printf("Ошибка items.txt: нужны %d непустых названий длиной до %d байт.\n",
+                MAX_ITEMS, MAX_NAME_LEN - 1);
             fclose(f);
             return 0;
         }
-        snprintf(item_names[line_no], MAX_NAME_LEN, "%s", line);
-        line_no++;
+        strcpy(item_names[line_no++], line);
     }
-
+    if (ferror(f) || line_no != MAX_ITEMS) {
+        printf("Ошибка: не удалось прочитать все %d названий из items.txt.\n", MAX_ITEMS);
+        fclose(f);
+        return 0;
+    }
     fclose(f);
-
-    if (line_no == 0) {
-        printf("Ошибка: файл items.txt пуст. Программа будет остановлена.\n");
-        return 0;
-    }
-
-    if (line_no < MAX_ITEMS) {
-        printf("Ошибка: в items.txt только %d названий из %d. Нужны все %d. Программа будет остановлена.\n",
-            line_no, MAX_ITEMS, MAX_ITEMS);
-        return 0;
-    }
 
     printf("Каталог предметов загружен из items.txt (%d названий)\n", line_no);
     return 1;
@@ -551,60 +534,91 @@ void write_diary(const char* farmer_name, int day, int hour,
     printf("Состояние записано в diary.txt\n");
 }
 
-void parse_entry(const char* token,
+int parse_hour(const char* text, int maximum, int* hour)
+{
+    char* end;
+    long value;
+    errno = 0;
+    value = strtol(text, &end, 10);
+    if (end == text) return 0;
+    while (isspace((unsigned char)*end)) end++;
+    if (errno != 0 || *end != '\0' || value < 0 || value > maximum) return 0;
+    *hour = (int)value;
+    return 1;
+}
+
+int parse_entry(char* token,
     char names[][MAX_NPC_NAME], int* starts, int* ends,
     char locs[][MAX_NPC_NAME], int* count)
 {
-    char name[MAX_NPC_NAME];
-    char loc[MAX_NPC_NAME];
-    int s, e;
-
-    if (*count >= MAX_RECORDS) {
-        return;
+    char* fields[4];
+    int i, start, end;
+    fields[0] = token;
+    for (i = 1; i < 4; i++) {
+        char* separator = strchr(fields[i - 1], ';');
+        if (!separator) return 0;
+        *separator = '\0';
+        fields[i] = separator + 1;
     }
-
-    sscanf(token, "%63[^;];%d;%d;%63[^\n]", name, &s, &e, loc);
-
-    snprintf(names[*count], MAX_NPC_NAME, "%s", name);
-    starts[*count] = s;
-    ends[*count] = e;
-    snprintf(locs[*count], MAX_NPC_NAME, "%s", loc);
+    if (strchr(fields[3], ';')) return 0;
+    /* Убираем пробелы вокруг полей, в том числе после запятой между записями. */
+    for (i = 0; i < 4; i++) {
+        size_t length;
+        while (isspace((unsigned char)*fields[i])) fields[i]++;
+        length = strlen(fields[i]);
+        while (length > 0 && isspace((unsigned char)fields[i][length - 1]))
+            fields[i][--length] = '\0';
+        if (length == 0) return 0;
+    }
+    if (*count >= MAX_RECORDS || strlen(fields[0]) >= MAX_NPC_NAME ||
+        strlen(fields[3]) >= MAX_NPC_NAME ||
+        !parse_hour(fields[1], HOURS_PER_DAY - 1, &start) ||
+        !parse_hour(fields[2], HOURS_PER_DAY, &end)) return 0;
+    strcpy(names[*count], fields[0]);
+    strcpy(locs[*count], fields[3]);
+    starts[*count] = start;
+    ends[*count] = end;
     (*count)++;
+    return 1;
 }
 
 int load_schedule(char names[][MAX_NPC_NAME], int* starts, int* ends,
     char locs[][MAX_NPC_NAME], int* count)
 {
     FILE* f;
-    char token[1024];
-    int tlen = 0;
+    char token[SCHEDULE_TOKEN_SIZE];
+    size_t length = 0;
     int c;
-
+    int valid = 1;
     *count = 0;
     f = fopen("input.txt", "r");
-    if (!f) {
-        return 0;
-    }
-
+    if (!f) return 0;
     while ((c = fgetc(f)) != EOF) {
         if (c == ',' || c == '\n' || c == '\r') {
-            if (tlen > 0) {
-                token[tlen] = '\0';
-                parse_entry(token, names, starts, ends, locs, count);
-                tlen = 0;
+            if (length > 0) {
+                token[length] = '\0';
+                if (!parse_entry(token, names, starts, ends, locs, count)) {
+                    valid = 0;
+                    break;
+                }
+                length = 0;
             }
         }
         else {
-            token[tlen++] = (char)c;
+            if (length >= sizeof(token) - 1) {
+                valid = 0;
+                break;
+            }
+            token[length++] = (char)c;
         }
     }
-    if (tlen > 0) {
-        token[tlen] = '\0';
-        parse_entry(token, names, starts, ends, locs, count);
+    if (valid && length > 0) {
+        token[length] = '\0';
+        valid = parse_entry(token, names, starts, ends, locs, count);
     }
-
+    if (ferror(f) || *count == 0) valid = 0;
     fclose(f);
-    return 1;
+    return valid;
 }
 
 int hour_in_interval(int hour, int start, int end)
@@ -650,7 +664,7 @@ void decode_variant(int hour)
     int i, j;
 
     if (!load_schedule(names, starts, ends, locs, &count)) {
-        printf("Ошибка: не удалось открыть input.txt.\n");
+        printf("Ошибка: не удалось прочитать корректное расписание из input.txt.\n");
         return;
     }
 
