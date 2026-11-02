@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
+#include <ctype.h>
 
 #define INV_SIZE 10
 #define MAX_ITEMS 10
@@ -8,6 +12,66 @@
 
 #define MAX_RECORDS 200
 #define MAX_NPC_NAME 64
+
+#define INPUT_SIZE 256
+#define HOURS_PER_DAY 24
+#define MAX_MENU_CHOICE 10
+#define SCHEDULE_TOKEN_SIZE 1024
+
+/* 1: строка прочитана, 0: конец ввода, -1: строка слишком длинная. */
+int read_line(FILE* stream, char* text, size_t size)
+{
+    size_t length;
+    int ch;
+    if (!fgets(text, (int)size, stream)) return 0;
+    length = strlen(text);
+    if (length > 0 && text[length - 1] == '\n') {
+        text[--length] = '\0';
+    }
+    else {
+        ch = fgetc(stream);
+        if (ch != '\n' && ch != EOF) {
+            while (ch != '\n' && ch != EOF) ch = fgetc(stream);
+            return -1;
+        }
+    }
+    if (length > 0 && text[length - 1] == '\r') text[length - 1] = '\0';
+    return 1;
+}
+
+int read_text(const char* prompt, char* text, size_t size)
+{
+    int result;
+    for (;;) {
+        printf("%s", prompt);
+        result = read_line(stdin, text, size);
+        if (result == 0) return 0;
+        if (result == 1 && text[0] != '\0') return 1;
+        printf("Ошибка: введите непустую строку длиной до %zu байт.\n", size - 1);
+    }
+}
+
+int read_int(const char* prompt, int minimum, int maximum, int* value)
+{
+    char text[INPUT_SIZE];
+    char* end;
+    long number;
+    for (;;) {
+        if (!read_text(prompt, text, sizeof(text))) return 0;
+        errno = 0;
+        number = strtol(text, &end, 10);
+        if (end == text) {
+            printf("Ошибка: требуется целое число.\n");
+            continue;
+        }
+        while (isspace((unsigned char)*end)) end++;
+        if (errno == 0 && *end == '\0' && number >= minimum && number <= maximum) {
+            *value = (int)number;
+            return 1;
+        }
+        printf("Ошибка: введите целое число от %d до %d.\n", minimum, maximum);
+    }
+}
 
 int load_items(char item_names[][MAX_NAME_LEN])
 {
@@ -85,20 +149,13 @@ void work(int* day, int* hour)
 {
     int spend;
 
-    printf("Сколько хотите потратить часов на работу? ");
-    scanf("%d", &spend);
-
-    if (*hour + spend < 24) {
-        *hour = *hour + spend;
+    if (!read_int("Сколько хотите потратить часов на работу? ", 0, INT_MAX - *hour, &spend)) return;
+    if ((spend + *hour) / HOURS_PER_DAY > INT_MAX - *day) {
+        printf("Слишком большое количество дней.\n");
+        return;
     }
-    else {
-        *day = *day + 1;
-        *hour = *hour + spend - 24;
-        while (*hour >= 24) {
-            *day = *day + 1;
-            *hour = *hour - 24;
-        }
-    }
+    *day += (spend + *hour) / HOURS_PER_DAY;
+    *hour = (spend + *hour) % HOURS_PER_DAY;
 }
 
 // 3
@@ -116,10 +173,12 @@ void add_item(int* counts, int* ids)
 {
     int slot, item;
 
-    printf("Введите индекс слота: \n");
-    scanf("%d", &slot);
-    printf("Введите ID предмета: \n");
-    scanf("%d", &item);
+    if (!read_int("Введите индекс слота: ", 0, INV_SIZE - 1, &slot) ||
+        !read_int("Введите ID предмета: ", 0, MAX_ITEMS - 1, &item)) return;
+    if (counts[slot] == INT_MAX) {
+        printf("Слот переполнен.\n");
+        return;
+    }
 
     if (slot >= 0 && slot < INV_SIZE && item >= 0 && item < MAX_ITEMS) {
         counts[slot] = counts[slot] + 1;
@@ -135,8 +194,8 @@ void drop_item(int* counts, int* ids)
 {
     int slot;
 
-    printf("Введите индекс слота с которого хотите выбросить предметы\n");
-    scanf("%d", &slot);
+    if (!read_int("Введите индекс слота с которого хотите выбросить предметы: ",
+        0, INV_SIZE - 1, &slot)) return;
 
     if (slot >= 0 && slot < INV_SIZE) {
         counts[slot] = 0;
@@ -200,18 +259,7 @@ void find_item(const int* counts, const char item_names[][MAX_NAME_LEN], const i
     int id = -1;
     int i;
     int found_slot = 0;
-    size_t len;
-
-    printf("Введите название предмета для поиска: ");
-    if (scanf(" %31[^\n]", search) != 1) {
-        printf("Ошибка ввода названия.\n");
-        return;
-    }
-
-    len = strlen(search);
-    while (len > 0 && (search[len - 1] == '\r' || search[len - 1] == '\n')) {
-        search[--len] = '\0';
-    }
+    if (!read_text("Введите название предмета для поиска: ", search, sizeof(search))) return;
 
     for (i = 0; i < MAX_ITEMS; i++) {
         if (strcmp(item_names[i], search) == 0) {
@@ -468,57 +516,14 @@ int main(void)
         return 1;
     }
 
-    {
-        int name_ok = 0;
-        while (!name_ok) {
-            printf("Введите имя фермера (до 32 символов): ");
-            if (fgets(farmer_name, sizeof(farmer_name), stdin) == NULL) {
-                printf("\nОшибка: не удалось прочитать имя (конец ввода). Программа будет остановлена.\n");
-                return 1;
-            }
-
-            {
-                size_t len = strlen(farmer_name);
-                int got_newline = 0;
-                int too_long = 0;
-
-                while (len > 0 && (farmer_name[len - 1] == '\n' || farmer_name[len - 1] == '\r')) {
-                    farmer_name[--len] = '\0';
-                    got_newline = 1;
-                }
-
-                if (!got_newline) {
-                    int ch = getchar();
-                    if (ch != '\n' && ch != EOF) {
-                        too_long = 1;
-                        while (ch != '\n' && ch != EOF) {
-                            ch = getchar();
-                        }
-                    }
-                }
-
-                if (too_long) {
-                    printf("Ошибка: имя слишком длинное (максимум 32 символа). Попробуйте снова.\n");
-                    continue;
-                }
-
-                if (farmer_name[0] == '\0') {
-                    printf("Ошибка: имя не может быть пустым. Попробуйте снова.\n");
-                    continue;
-                }
-
-                name_ok = 1;
-            }
-        }
-    }
+    if (!read_text("Введите имя фермера (до 32 байт): ", farmer_name, sizeof(farmer_name))) return 0;
     printf("Привет, %s!\n", farmer_name);
 
     print_menu();
 
     while (x != 0) {
         printf("\n=== %s | День %d | %d:00 ===\n", farmer_name, current_day, current_hour);
-        printf("Введите номер действия:\n");
-        scanf("%d", &x);
+        if (!read_int("Введите номер действия: ", 0, MAX_MENU_CHOICE, &x)) break;
 
         handle_choice(x, farmer_name, &current_day, &current_hour,
             inventory, item_names, inventoryx);
