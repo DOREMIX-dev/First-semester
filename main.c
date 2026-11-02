@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <ctype.h>
+#include <time.h>
 
 #define INV_SIZE 10
 #define MAX_ITEMS 10
@@ -191,6 +192,109 @@ int generate_map(Dungeon* dungeon)
     return 1;
 }
 
+void print_map(const Dungeon* dungeon)
+{
+    int x, y;
+    printf("\nГлубина: %d | Размер: %dx%d\n", dungeon->depth, dungeon->width, dungeon->height);
+    for (y = 0; y < dungeon->height; y++) {
+        for (x = 0; x < dungeon->width; x++) {
+            putchar(x == dungeon->hero_x && y == dungeon->hero_y
+                ? TILE_HERO : dungeon->cells[y][x]);
+        }
+        putchar('\n');
+    }
+}
+
+int can_walk(const Dungeon* dungeon, int x, int y)
+{
+    char tile;
+    if (x < 0 || y < 0 || x >= dungeon->width || y >= dungeon->height) return 0;
+    tile = dungeon->cells[y][x];
+    return tile == TILE_FLOOR || tile == TILE_UP || tile == TILE_DOWN;
+}
+
+int next_floor(Dungeon* dungeon)
+{
+    if (dungeon->depth == INT_MAX) {
+        printf("Достигнута максимальная глубина. Приключение завершено.\n");
+        return 0;
+    }
+    free_map(dungeon);
+    if (!generate_map(dungeon)) {
+        printf("Не удалось выделить память для нового этажа.\n");
+        return 0;
+    }
+    dungeon->depth++;
+    printf("Вы спустились на следующий этаж.\n");
+    return 1;
+}
+
+/* -1: приключение нужно завершить, 0: препятствие, 1: успешный ход. */
+int move_hero(Dungeon* dungeon, int dx, int dy)
+{
+    int new_x = dungeon->hero_x + dx;
+    int new_y = dungeon->hero_y + dy;
+    if (!can_walk(dungeon, new_x, new_y)) {
+        printf("Проход закрыт стеной или препятствием.\n");
+        return 0;
+    }
+    dungeon->hero_x = new_x;
+    dungeon->hero_y = new_y;
+    if (dungeon->cells[new_y][new_x] == TILE_DOWN && !next_floor(dungeon)) return -1;
+    return 1;
+}
+
+int read_direction(char* direction)
+{
+    char text[INPUT_SIZE];
+    for (;;) {
+        if (!read_text("W/A/S/D — движение, Q — домой с лестницы U: ", text, sizeof(text))) return 0;
+        if (text[1] == '\0') {
+            char command = (char)toupper((unsigned char)text[0]);
+            if (command == 'W' || command == 'A' || command == 'S' ||
+                command == 'D' || command == 'Q') {
+                *direction = command;
+                return 1;
+            }
+        }
+        printf("Введите одну команду W, A, S, D или Q и нажмите Enter.\n");
+    }
+}
+
+void adventure(void)
+{
+    Dungeon dungeon = {0};
+    char direction;
+    int playing = 1;
+    dungeon.depth = 1;
+    if (!generate_map(&dungeon)) {
+        printf("Не удалось выделить память для карты.\n");
+        return;
+    }
+    printf("Подземелье: @ — герой, # — стена, T/R — препятствия, U — домой, D — вниз.\n");
+    while (playing) {
+        int dx = 0, dy = 0;
+        print_map(&dungeon);
+        if (!read_direction(&direction)) break;
+        if (direction == 'Q') {
+            if (dungeon.cells[dungeon.hero_y][dungeon.hero_x] == TILE_UP) {
+                printf("Вы вернулись домой.\n");
+                playing = 0;
+            }
+            else printf("Вернуться домой можно только с лестницы U.\n");
+            continue;
+        }
+        switch (direction) {
+        case 'W': dy = -1; break;
+        case 'A': dx = -1; break;
+        case 'S': dy = 1; break;
+        case 'D': dx = 1; break;
+        }
+        if (move_hero(&dungeon, dx, dy) < 0) playing = 0;
+    }
+    free_map(&dungeon);
+}
+
 int load_items(char item_names[][MAX_NAME_LEN])
 {
     FILE* f;
@@ -252,6 +356,7 @@ void print_menu(void)
     printf(" 7 - Поиск предмета в рюкзаке по названию\n");
     printf(" 8 - Записать состояние в дневник (diary.txt)\n");
     printf(" 9 - Расписание жителей деревни (input.txt -> output.txt)\n");
+    printf("10 - Отправиться в приключение\n");
     printf(" 0 - Выйти из программы\n");
     printf("--------------------------------------\n");
 }
@@ -612,10 +717,13 @@ void handle_choice(int choice,
     case 9:
         decode_variant(*hour);
         break;
+    case 10:
+        adventure();
+        break;
     case 0:
         break;
     default:
-        printf("Есть лишь 9 команд!\n");
+        printf("Неизвестная команда меню.\n");
         break;
     }
 }
@@ -630,6 +738,7 @@ int main(void)
     int inventoryx[INV_SIZE] = { 0 }; // Что именно находится?
     int x = 7;
 
+    srand((unsigned int)time(NULL));
     if (!load_items(item_names)) {
         return 1;
     }
