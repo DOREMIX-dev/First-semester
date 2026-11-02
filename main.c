@@ -85,6 +85,8 @@ int read_int(const char* prompt, int minimum, int maximum, int* value)
 #define TILE_UP 'U'
 #define TILE_DOWN 'D'
 #define TILE_HERO '@'
+#define TILE_UNKNOWN '?'
+#define VISIBILITY_RADIUS 4
 
 typedef struct {
     char** cells;
@@ -192,14 +194,23 @@ int generate_map(Dungeon* dungeon)
     return 1;
 }
 
+/* Туман скрывает только изображение, сами клетки карты не меняются. */
+char visible_tile(const Dungeon* dungeon, int x, int y)
+{
+    int dx = x - dungeon->hero_x;
+    int dy = y - dungeon->hero_y;
+    if (dx * dx + dy * dy > VISIBILITY_RADIUS * VISIBILITY_RADIUS) return TILE_UNKNOWN;
+    if (dx == 0 && dy == 0) return TILE_HERO;
+    return dungeon->cells[y][x];
+}
+
 void print_map(const Dungeon* dungeon)
 {
     int x, y;
     printf("\nГлубина: %d | Размер: %dx%d\n", dungeon->depth, dungeon->width, dungeon->height);
     for (y = 0; y < dungeon->height; y++) {
         for (x = 0; x < dungeon->width; x++) {
-            putchar(x == dungeon->hero_x && y == dungeon->hero_y
-                ? TILE_HERO : dungeon->cells[y][x]);
+            putchar(visible_tile(dungeon, x, y));
         }
         putchar('\n');
     }
@@ -272,6 +283,7 @@ void adventure(void)
         return;
     }
     printf("Подземелье: @ — герой, # — стена, T/R — препятствия, U — домой, D — вниз.\n");
+    printf("Туман войны: радиус обзора — %d клетки, ? — неизвестная область.\n", VISIBILITY_RADIUS);
     while (playing) {
         int dx = 0, dy = 0;
         print_map(&dungeon);
