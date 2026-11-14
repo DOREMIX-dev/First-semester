@@ -12,8 +12,7 @@
 #define MAX_RECORDS 200
 #define MAX_NPC_NAME 64
 
-#define HOURS_PER_DAY 24
-#define MAX_MENU_CHOICE 11
+#define MAX_MENU_CHOICE 12
 #define SCHEDULE_TOKEN_SIZE 1024
 
 int load_items(char item_names[][MAX_NAME_LEN])
@@ -62,28 +61,46 @@ void print_menu(void)
     printf(" 9 - Расписание жителей деревни (input.txt -> output.txt)\n");
     printf("10 - Отправиться в приключение\n");
     printf("11 - Потратить часы на работу\n");
+    printf("12 - Время и отдых\n");
     printf(" 0 - Выйти из программы\n");
     printf("--------------------------------------\n");
 }
 
-// 1
-void print_time(int day, int hour)
+static void work(GameClock* clock)
 {
-    printf("Текущее время: %d, %d:00 \n", day, hour);
-}
-
-// 2
-void work(int* day, int* hour)
-{
+    int hours = hours_until_bedtime(clock);
     int spend;
-
-    if (!read_int("Сколько хотите потратить часов на работу? ", 0, INT_MAX - *hour, &spend)) return;
-    if ((spend + *hour) / HOURS_PER_DAY > INT_MAX - *day) {
-        printf("Слишком большое количество дней.\n");
+    if (!hours) {
+        puts("Рабочий день закончился. Пора спать.");
         return;
     }
-    *day += (spend + *hour) / HOURS_PER_DAY;
-    *hour = (spend + *hour) % HOURS_PER_DAY;
+    if (read_int("Сколько часов работать? ", 1, hours, &spend))
+        advance_clock(clock, spend);
+}
+
+static void time_menu(Player* player, GameClock* clock)
+{
+    int choice, hours;
+    puts("1 — Посмотреть на часы\n2 — Ждать\n3 — Лечь спать\n0 — Назад");
+    if (!read_int("Действие: ", 0, 3, &choice)) return;
+    switch (choice) {
+    case 1: print_time(clock); break;
+    case 2:
+        hours = hours_until_bedtime(clock);
+        if (!hours) puts("Уже 02:00. Пора спать.");
+        else if (read_int("Сколько часов ждать? ", 1, hours, &hours))
+            advance_clock(clock, hours);
+        break;
+    case 3:
+        if (!player) puts("Сначала создайте персонажа.");
+        else if (sleep_until_morning(clock)) {
+            player->hp = player->max_hp;
+            player->stamina = player->max_stamina;
+            print_time(clock);
+        }
+        break;
+    case 0: break;
+    }
 }
 
 // 8
@@ -287,13 +304,13 @@ void decode_variant(int hour)
 
 typedef enum MenuChoice {
     EXIT_GAME, CREATE_PLAYER, PLAYER_CARD, INVENTORY, ADD_ITEM, DROP_ITEM,
-    COMMON_ITEM, FIND_ITEM, DIARY, SCHEDULE, ADVENTURE, WORK
+    COMMON_ITEM, FIND_ITEM, DIARY, SCHEDULE, ADVENTURE, WORK, TIME_MENU
 } MenuChoice;
 
-static void handle_choice(MenuChoice choice, Player* player, int* day, int* hour,
+static void handle_choice(MenuChoice choice, Player* player, GameClock* clock,
     char item_names[][MAX_NAME_LEN])
 {
-    if (!player && choice != SCHEDULE && choice != EXIT_GAME) {
+    if (!player && choice != SCHEDULE && choice != TIME_MENU && choice != EXIT_GAME) {
         puts("Сначала создайте персонажа.");
         return;
     }
@@ -301,19 +318,20 @@ static void handle_choice(MenuChoice choice, Player* player, int* day, int* hour
     switch (choice) {
     case PLAYER_CARD:
         print_player(player);
-        print_time(*day, *hour);
+        print_time(clock);
         show_inventory(player->counts, item_names, player->ids);
         break;
-    case WORK: work(day, hour); break;
+    case WORK: work(clock); break;
+    case TIME_MENU: time_menu(player, clock); break;
     case INVENTORY: show_inventory(player->counts, item_names, player->ids); break;
     case ADD_ITEM: add_item(player->counts, player->ids); break;
     case DROP_ITEM: drop_item(player->counts, player->ids); break;
     case COMMON_ITEM: show_most_common(player->ids, item_names); break;
     case FIND_ITEM: find_item(player->counts, item_names, player->ids); break;
     case DIARY:
-        write_diary(player->name, *day, *hour, player->counts, item_names, player->ids);
+        write_diary(player->name, clock->day, clock->hour, player->counts, item_names, player->ids);
         break;
-    case SCHEDULE: decode_variant(*hour); break;
+    case SCHEDULE: decode_variant(clock->hour); break;
     case ADVENTURE: adventure(); break;
     case EXIT_GAME:
     case CREATE_PLAYER: break;
@@ -324,8 +342,7 @@ int main(void)
 {
     Player* player = NULL;
     char item_names[MAX_ITEMS][MAX_NAME_LEN];
-    int current_day = 1;
-    int current_hour = 8;
+    GameClock clock = { 1, MORNING_HOUR };
     int choice;
 
     srand((unsigned int)time(NULL));
@@ -336,7 +353,7 @@ int main(void)
         if (!read_int("Введите номер действия: ", EXIT_GAME, MAX_MENU_CHOICE, &choice) ||
             choice == EXIT_GAME) break;
         if (choice == CREATE_PLAYER) player = create_player(player);
-        else handle_choice((MenuChoice)choice, player, &current_day, &current_hour, item_names);
+        else handle_choice((MenuChoice)choice, player, &clock, item_names);
     }
 
     destroy_player(player);

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <limits.h>
 #include <ctype.h>
 
 /* 1: строка прочитана, 0: конец ввода, -1: строка слишком длинная. */
@@ -57,4 +58,37 @@ int read_int(const char* prompt, int minimum, int maximum, int* value)
         }
         printf("Ошибка: введите целое число от %d до %d.\n", minimum, maximum);
     }
+}
+
+void print_time(const GameClock* clock)
+{
+    printf("День %d, %02d:00\n", clock->day, clock->hour);
+}
+
+int hours_until_bedtime(const GameClock* clock)
+{
+    return (BEDTIME_HOUR - clock->hour + HOURS_PER_DAY) % HOURS_PER_DAY;
+}
+
+int advance_clock(GameClock* clock, int hours)
+{
+    int hour = clock->hour + hours;
+    if (hour >= HOURS_PER_DAY && clock->day == INT_MAX) {
+        puts("Достигнут последний день календаря.");
+        return 0;
+    }
+    clock->day += hour / HOURS_PER_DAY;
+    clock->hour = hour % HOURS_PER_DAY;
+    return 1;
+}
+
+int sleep_until_morning(GameClock* clock)
+{
+    if (clock->day == INT_MAX) {
+        puts("Достигнут последний день календаря.");
+        return 0;
+    }
+    clock->day++;
+    clock->hour = MORNING_HOUR;
+    return 1;
 }
