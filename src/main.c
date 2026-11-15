@@ -332,7 +332,7 @@ static void handle_choice(MenuChoice choice, Player* player, GameClock* clock,
         write_diary(player->name, clock->day, clock->hour, player->counts, item_names, player->ids);
         break;
     case SCHEDULE: decode_variant(clock->hour); break;
-    case ADVENTURE: adventure(); break;
+    case ADVENTURE: adventure(player, clock); break;
     case EXIT_GAME:
     case CREATE_PLAYER: break;
     }

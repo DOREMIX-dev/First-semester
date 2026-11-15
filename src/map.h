@@ -1,6 +1,9 @@
 #ifndef MAP_H
 #define MAP_H
 
-void adventure(void);
+#include "player.h"
+#include "utils.h"
+
+void adventure(Player* player, GameClock* clock);
 
 #endif
