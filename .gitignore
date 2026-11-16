@@ -431,3 +431,6 @@ FodyWeavers.xsd
 *.exe
 *.o
 *.out
+
+/diary.txt
+/output.txt

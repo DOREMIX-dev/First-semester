@@ -43,6 +43,56 @@ void print_player(const Player* player)
         player->stamina, player->max_stamina, player->gold);
 }
 
+#define EFFECT_CHANCE_PERCENT 5
+#define EFFECT_DURATION 10
+#define PERCENT_TOTAL 100
+#define SPRAIN_COST_MULTIPLIER 2
+#define POISON_DAMAGE 2
+
+static const char* status_name(StatusEffect effect)
+{
+    switch (effect) {
+    case SPRAIN: return "Растяжение";
+    case POISON: return "Отравление";
+    case VIGOR: return "Бодрость";
+    case HEALTHY: return "Здоров";
+    }
+    return "Здоров";
+}
+
+void print_status(const Player* player)
+{
+    printf("Состояние: %s", status_name(player->buff.type));
+    if (player->buff.steps_left > 0) printf(" (%d ходов)", player->buff.steps_left);
+    putchar('\n');
+}
+
+int apply_step_effect(Player* player, int base_cost)
+{
+    Buff* buff = &player->buff;
+    int cost = base_cost;
+
+    switch (buff->type) {
+    case SPRAIN: cost *= SPRAIN_COST_MULTIPLIER; break;
+    case POISON:
+        player->hp = player->hp > POISON_DAMAGE ? player->hp - POISON_DAMAGE : 0;
+        break;
+    case VIGOR: cost = 0; break;
+    case HEALTHY: break;
+    }
+
+    if (buff->steps_left > 0 && --buff->steps_left == 0) buff->type = HEALTHY;
+
+    if (rand() % PERCENT_TOTAL < EFFECT_CHANCE_PERCENT) {
+        buff->type = (StatusEffect)(SPRAIN + rand() % (VIGOR - SPRAIN + 1));
+        buff->steps_left = EFFECT_DURATION;
+        printf("%s. Новый эффект: %s (%d ходов).\n",
+            buff->type == SPRAIN ? "Герой наступил на колючку" : "Герой съел странную ягоду",
+            status_name(buff->type), buff->steps_left);
+    }
+    return cost;
+}
+
 void show_inventory(const int* counts, const char item_names[][MAX_NAME_LEN], const int* ids)
 {
     int i;

@@ -171,7 +171,7 @@ static void spend_stamina(Player* player, int cost)
 
 static int evacuate_if_needed(Player* player, const GameClock* clock)
 {
-    if (player->stamina > 0 && clock->hour != BEDTIME_HOUR) return 0;
+    if (player->hp > 0 && player->stamina > 0 && clock->hour != BEDTIME_HOUR) return 0;
     int fee = player->gold / GOLD_LOSS_DIVISOR;
     player->gold -= fee;
     printf("Герой потерял сознание. Спасатели доставили его домой за %d золотых.\n", fee);
@@ -233,7 +233,7 @@ static int move_hero(Map** map, Player* player, GameClock* clock, Direction dire
 
     player->x = x;
     player->y = y;
-    spend_stamina(player, STEP_COST);
+    spend_stamina(player, apply_step_effect(player, STEP_COST));
     if (evacuate_if_needed(player, clock)) return 0;
     if ((*map)->cells[y][x] != TILE_DOWN) return 1;
     return next_floor(map, player, clock) && !evacuate_if_needed(player, clock);
@@ -241,7 +241,7 @@ static int move_hero(Map** map, Player* player, GameClock* clock, Direction dire
 
 void adventure(Player* player, GameClock* clock)
 {
-    if (player->stamina == 0 || clock->hour == BEDTIME_HOUR) {
+    if (player->hp == 0 || player->stamina == 0 || clock->hour == BEDTIME_HOUR) {
         puts("Перед приключением нужно отдохнуть.");
         return;
     }
@@ -262,6 +262,7 @@ void adventure(Player* player, GameClock* clock)
         printf("HP: %d/%d | Выносливость: %d/%d | Золото: %d | Этаж: %d | Время: %02d:00\n",
             player->hp, player->max_hp, player->stamina, player->max_stamina,
             player->gold, map->depth, clock->hour);
+        print_status(player);
         print_map(map, player);
         if (!read_direction(&direction)) break;
         if (direction == QUIT) {

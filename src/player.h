@@ -7,12 +7,22 @@
 #define MAX_FARMER_NAME 33
 
 
+typedef enum StatusEffect {
+    HEALTHY, SPRAIN, POISON, VIGOR
+} StatusEffect;
+
+typedef struct Buff {
+    StatusEffect type;
+    int steps_left;
+} Buff;
+
 typedef struct Player {
     char name[MAX_FARMER_NAME];
     int hp, max_hp;
     int stamina, max_stamina;
     int gold;
     int x, y;
+    Buff buff;
     int counts[INV_SIZE];
     int ids[INV_SIZE];
 } Player;
@@ -20,6 +30,8 @@ typedef struct Player {
 Player* create_player(Player* previous);
 void destroy_player(Player* player);
 void print_player(const Player* player);
+void print_status(const Player* player);
+int apply_step_effect(Player* player, int base_cost);
 void show_inventory(const int* counts, const char item_names[][MAX_NAME_LEN], const int* ids);
 void add_item(int* counts, int* ids);
 void drop_item(int* counts, int* ids);

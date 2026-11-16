@@ -318,6 +318,7 @@ static void handle_choice(MenuChoice choice, Player* player, GameClock* clock,
     switch (choice) {
     case PLAYER_CARD:
         print_player(player);
+        print_status(player);
         print_time(clock);
         show_inventory(player->counts, item_names, player->ids);
         break;
